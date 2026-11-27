@@ -2,7 +2,7 @@
 
 ```
 React app (https://dzo4l1wjzweva.cloudfront.net)
-   │  POST https://<orchestrator distribution>.cloudfront.net/api/v1/chat
+   │  POST https://d23pzgqslfrw1a.cloudfront.net/api/v1/chat
    ▼
 CloudFront ── VPC origin (private) ──▶ ┌──────── EC2 t3.micro (no public inbound ports) ────────┐
                                        │  docker network "transport"                             │
@@ -23,10 +23,12 @@ server needs no change and still has no published port beyond `127.0.0.1:8080`.
 - **OpenAI key:** SSM Parameter Store SecureString `/transport-mcp/openai-api-key`, read by
   [`run.sh`](run.sh) at container start. The instance role `transport-mcp-ec2` has an inline policy
   `read-openai-api-key` allowing `ssm:GetParameter` on that one parameter.
-- **Public endpoint:** a CloudFront distribution whose origin is a CloudFront **VPC origin**
+- **Public endpoint:** `https://d23pzgqslfrw1a.cloudfront.net` (distribution `E2MPSCBX84SC3K`,
+  price class 100), whose origin is a CloudFront **VPC origin**
   (`transport-mcp-orchestrator`) pointing at the instance on HTTP port 8081. CloudFront gives HTTPS
-  on its `*.cloudfront.net` name. Caching is off and all methods and headers are forwarded; the
-  origin response timeout is 60 s, because a chat with several tool calls can take a while.
+  on its `*.cloudfront.net` name. Caching is off, it's HTTPS only, and all methods, headers and
+  query strings are forwarded (except `Host`). The origin response timeout is 60 s, because a chat
+  with several tool calls can take a while.
 - **Security groups:** the instance now has two. `transport-mcp-sg` is unchanged (no inbound
   rules). `transport-orchestrator-sg` allows TCP 8081 only from the service-managed
   `CloudFront-VPCOrigins-Service-SG`, so the port can't be reached from the internet directly.
