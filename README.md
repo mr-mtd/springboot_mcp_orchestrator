@@ -215,18 +215,69 @@ For example, p95 latency of each MCP tool as seen by the orchestrator:
 `/actuator/health` includes an `mcpServer` component that pings the MCP server, so the
 orchestrator reports `DOWN` (503) while the server is unreachable.
 
-## Running it
+## Run locally
 
-Start the [transport MCP server](https://github.com/mr-mtd/springboot_MCP_server) on port 8080
-(see its README), then:
+You need **JDK 21** and **Maven 3.9+** (`java -version`, `mvn -v`). The orchestrator calls the
+[transport MCP server](https://github.com/mr-mtd/springboot_MCP_server), so start that first.
+
+### 1. Start the MCP server (port 8080)
+
+If you already have its database (RDS), follow the MCP server's README. To run everything on your
+machine instead, use a local Postgres in Docker:
 
 ```bash
-mvn spring-boot:run
-# or point it somewhere else
-MCP_SERVER_URL=http://mcp.internal:8080 CORS_ALLOWED_ORIGINS=https://app.example.com mvn spring-boot:run
+git clone https://github.com/mr-mtd/springboot_MCP_server.git
+cd springboot_MCP_server
+
+# Postgres 18 with an empty "transport" database
+docker run -d --name transport-db -p 5432:5432 \
+  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=transport postgres:18
+
+# The two users (local passwords only: migrator / mcp)
+sed -e 's/CHANGE_ME_1/migrator/' -e 's/CHANGE_ME_2/mcp/' db/roles.sql \
+  | docker exec -i transport-db psql -U postgres -d transport
+
+# Create the tables and seed data (runs Flyway, then exits)
+MIGRATOR_PASSWORD=migrator mvn spring-boot:run -Dspring-boot.run.profiles=migrate
+
+# Start the MCP server as the read-only user
+DB_PASSWORD=mcp mvn spring-boot:run
 ```
 
-Swagger UI: `http://localhost:8081/swagger`. Health: `http://localhost:8081/actuator/health`.
+Check it: `curl -s localhost:8080/actuator/health` shows `"status":"UP"`.
+
+### 2. Start the orchestrator (port 8081)
+
+In a second terminal:
+
+```bash
+git clone https://github.com/mr-mtd/springboot_mcp_orchestrator.git
+cd springboot_mcp_orchestrator
+mvn spring-boot:run
+```
+
+The defaults already point at the MCP server on `http://localhost:8080` and allow the React dev
+servers on ports 3000 and 5173. Override them if yours differ:
+
+```bash
+MCP_SERVER_URL=http://localhost:8080 \
+CORS_ALLOWED_ORIGINS=http://localhost:5173 \
+mvn spring-boot:run
+```
+
+### 3. Check it works
+
+```bash
+curl -s localhost:8081/actuator/health                 # "mcpServer":{"status":"UP",...}
+curl -s localhost:8081/api/v1/loads/420
+curl -s 'localhost:8081/api/v1/dashboard/delays?topCarriers=3'
+```
+
+Swagger UI: `http://localhost:8081/swagger`. In the React app, set the API base URL to
+`http://localhost:8081` (for Vite, `VITE_API_URL=http://localhost:8081` in `.env.local`).
+
+If `/api/v1/...` answers `503` with `"code":"mcp_unavailable"`, the orchestrator can't reach the MCP
+server: check it's running and that `MCP_SERVER_URL` is right.
 
 ### In Docker
 
