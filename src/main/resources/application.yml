@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: transport-mcp-orchestrator
+  mvc:
+    problemdetails:
+      enabled: true
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      chat:
+        model: ${OPENAI_MODEL:gpt-5-mini}
+    mcp:
+      client:
+        name: transport-mcp-orchestrator
+        # Connect on first use, so the app starts even when the MCP server is down.
+        initialized: false
+        request-timeout: ${MCP_REQUEST_TIMEOUT:20s}
+        streamable-http:
+          connections:
+            transport:
+              url: ${MCP_SERVER_URL:http://localhost:8080}
+              endpoint: /mcp
+
+server:
+  # The transport MCP server defaults to 8080.
+  port: ${PORT:8081}
+
+orchestrator:
+  cors:
+    # Comma separated. Defaults cover the Vite (5173) and Create React App (3000) dev servers.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  metrics:
+    tags:
+      application: transport-mcp-orchestrator
+
+logging:
+  pattern:
+    level: "%5p [req=%X{requestId:-}]"
+  level:
+    io.github.mrmtd.orchestrator: ${LOG_LEVEL:INFO}
+
+# Swagger UI for the chat API at /swagger, OpenAPI document at /v3/api-docs.
+springdoc:
+  paths-to-match: /api/**
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger
