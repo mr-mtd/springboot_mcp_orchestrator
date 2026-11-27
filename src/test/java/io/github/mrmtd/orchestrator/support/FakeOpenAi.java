@@ -1,4 +1,4 @@
-package io.github.mrmtd.orchestrator;
+package io.github.mrmtd.orchestrator.support;
 
 import com.sun.net.httpserver.HttpServer;
 
@@ -15,13 +15,13 @@ import java.util.List;
  * A stand-in for the OpenAI Chat Completions API. Each request to {@code /v1/chat/completions} gets
  * the next scripted response, and the request bodies are kept so tests can check what was sent.
  */
-final class FakeOpenAi implements AutoCloseable {
+public final class FakeOpenAi implements AutoCloseable {
 
     private final HttpServer server;
     private final Deque<String> responses = new ArrayDeque<>();
     private final List<String> requests = Collections.synchronizedList(new ArrayList<>());
 
-    FakeOpenAi() {
+    public FakeOpenAi() {
         try {
             server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         } catch (IOException e) {
@@ -44,21 +44,21 @@ final class FakeOpenAi implements AutoCloseable {
         server.start();
     }
 
-    String baseUrl() {
+    public String baseUrl() {
         return "http://localhost:" + server.getAddress().getPort() + "/v1";
     }
 
-    void reset() {
+    public void reset() {
         responses.clear();
         requests.clear();
     }
 
-    List<String> requests() {
+    public List<String> requests() {
         return List.copyOf(requests);
     }
 
     /** The model asks to call {@code tool} with {@code argumentsJson}. */
-    FakeOpenAi thenToolCall(String tool, String argumentsJson) {
+    public FakeOpenAi thenToolCall(String tool, String argumentsJson) {
         String args = argumentsJson.replace("\\", "\\\\").replace("\"", "\\\"");
         responses.add("""
                 {"id":"chatcmpl-1","object":"chat.completion","created":1764230400,"model":"gpt-5-mini",
@@ -70,7 +70,7 @@ final class FakeOpenAi implements AutoCloseable {
     }
 
     /** The model answers with {@code text}. */
-    FakeOpenAi thenAnswer(String text) {
+    public FakeOpenAi thenAnswer(String text) {
         responses.add("""
                 {"id":"chatcmpl-2","object":"chat.completion","created":1764230401,"model":"gpt-5-mini",
                  "choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"%s"}}],

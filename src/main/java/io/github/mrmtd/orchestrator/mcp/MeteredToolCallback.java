@@ -1,4 +1,6 @@
-package io.github.mrmtd.orchestrator;
+package io.github.mrmtd.orchestrator.mcp;
+
+import io.github.mrmtd.orchestrator.model.ToolCall;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.Nullable;
@@ -19,15 +21,15 @@ import java.util.concurrent.TimeUnit;
  * ToolExecutionException; it is recorded as {@code outcome=error} and rethrown, and Spring AI hands
  * the message to the model so it can explain or retry.
  */
-class MeteredToolCallback implements ToolCallback {
+public class MeteredToolCallback implements ToolCallback {
 
     private static final Logger log = LoggerFactory.getLogger(MeteredToolCallback.class);
 
     private final ToolCallback delegate;
-    private final List<ChatService.ToolCall> calls;
+    private final List<ToolCall> calls;
     private final MeterRegistry meters;
 
-    MeteredToolCallback(ToolCallback delegate, List<ChatService.ToolCall> calls, MeterRegistry meters) {
+    public MeteredToolCallback(ToolCallback delegate, List<ToolCall> calls, MeterRegistry meters) {
         this.delegate = delegate;
         this.calls = calls;
         this.meters = meters;
@@ -56,7 +58,7 @@ class MeteredToolCallback implements ToolCallback {
             long nanos = System.nanoTime() - start;
             long ms = TimeUnit.NANOSECONDS.toMillis(nanos);
             meters.timer("orchestrator.tool.calls", "tool", tool, "outcome", outcome).record(nanos, TimeUnit.NANOSECONDS);
-            calls.add(new ChatService.ToolCall(tool, toolInput, outcome, ms));
+            calls.add(new ToolCall(tool, toolInput, outcome, ms));
             if ("success".equals(outcome)) {
                 log.info("tool={} outcome=success durationMs={} arguments={}", tool, ms, toolInput);
             } else {

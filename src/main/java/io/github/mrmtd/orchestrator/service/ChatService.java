@@ -1,5 +1,11 @@
-package io.github.mrmtd.orchestrator;
+package io.github.mrmtd.orchestrator.service;
 
+import io.github.mrmtd.orchestrator.exception.LlmException;
+import io.github.mrmtd.orchestrator.exception.McpUnavailableException;
+import io.github.mrmtd.orchestrator.mcp.MeteredToolCallback;
+import io.github.mrmtd.orchestrator.model.ChatReply;
+import io.github.mrmtd.orchestrator.model.TokenUsage;
+import io.github.mrmtd.orchestrator.model.ToolCall;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.jspecify.annotations.Nullable;
@@ -8,18 +14,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.session.DefaultSessionService;
-import org.springframework.ai.session.InMemorySessionRepository;
 import org.springframework.ai.session.advisor.SessionAdvisors;
-import org.springframework.ai.session.compaction.TurnCountTrigger;
-import org.springframework.ai.session.compaction.WindowCompactionStrategy;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -42,42 +41,14 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class ChatService {
 
-    /** One tool call the model made while answering. */
-    public record ToolCall(String tool, String arguments, String outcome, long durationMs) {
-    }
-
-    public record TokenUsage(int promptTokens, int completionTokens, int totalTokens) {
-    }
-
-    public record ChatReply(String conversationId, String answer, @Nullable String model,
-                            List<ToolCall> toolCalls, TokenUsage usage, long durationMs) {
-    }
-
-    static final String SYSTEM_PROMPT = """
-            You are the assistant for a freight operations dashboard. Answer questions about loads, \
-            carriers and delayed shipments using the tools; never make up loads, carriers or numbers. \
-            Load numbers look like LD-000420. If a tool returns an error, explain it plainly or try \
-            again with corrected input. Keep answers short and use bullet points or a small table \
-            for lists.""";
-
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
 
     private final ChatClient chatClient;
     private final ToolCallbackProvider mcpTools;
     private final MeterRegistry meters;
 
-    public ChatService(ChatClient.Builder builder, ToolCallbackProvider mcpTools, MeterRegistry meters) {
-        // In-memory conversation history: kept for an hour, trimmed to the last 10 turns after 20.
-        var sessions = DefaultSessionService.builder()
-                .sessionRepository(InMemorySessionRepository.builder().build())
-                .defaultTimeToLive(Duration.ofHours(1))
-                .build();
-        this.chatClient = builder
-                .defaultSystem(SYSTEM_PROMPT)
-                .defaultAdvisors(SessionAdvisors.builder(sessions)
-                        .compaction(new TurnCountTrigger(20), WindowCompactionStrategy.builder().lastTurns(10).build())
-                        .build())
-                .build();
+    public ChatService(ChatClient chatClient, ToolCallbackProvider mcpTools, MeterRegistry meters) {
+        this.chatClient = chatClient;
         this.mcpTools = mcpTools;
         this.meters = meters;
     }
@@ -88,34 +59,41 @@ public class ChatService {
         String outcome = "error";
         try {
             List<ToolCall> calls = Collections.synchronizedList(new ArrayList<>());
-            ChatResponse response = chatClient.prompt()
-                    .user(message)
-                    .tools((Object[]) tools(calls))
-                    .advisors(SessionAdvisors.session(id))
-                    .call()
-                    .chatResponse();
-            if (response == null || response.getResult() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The model returned no answer");
-            }
+            ChatResponse response = callModel(message, id, tools(calls));
             Usage usage = response.getMetadata().getUsage();
             var tokens = new TokenUsage(n(usage.getPromptTokens()), n(usage.getCompletionTokens()), n(usage.getTotalTokens()));
-            recordTokens(tokens);
+            meters.summary("orchestrator.chat.tokens", "type", "prompt").record(tokens.promptTokens());
+            meters.summary("orchestrator.chat.tokens", "type", "completion").record(tokens.completionTokens());
             long ms = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
             outcome = "success";
             log.info("chat conversation={} outcome=success toolCalls={} promptTokens={} completionTokens={} durationMs={}",
                     id, calls.size(), tokens.promptTokens(), tokens.completionTokens(), ms);
             return new ChatReply(id, response.getResult().getOutput().getText(), response.getMetadata().getModel(),
                     List.copyOf(calls), tokens, ms);
-        } catch (ResponseStatusException e) {
-            throw e;
-        } catch (RuntimeException e) {
-            log.error("chat conversation={} outcome=error durationMs={}", id,
-                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start), e);
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The assistant could not answer right now", e);
         } finally {
             Timer.builder("orchestrator.chat").description("Chat requests, start to answer")
                     .tag("outcome", outcome).publishPercentileHistogram().register(meters)
                     .record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+        }
+    }
+
+    private ChatResponse callModel(String message, String conversationId, ToolCallback[] tools) {
+        try {
+            ChatResponse response = chatClient.prompt()
+                    .user(message)
+                    .tools((Object[]) tools)
+                    .advisors(SessionAdvisors.session(conversationId))
+                    .call()
+                    .chatResponse();
+            if (response == null || response.getResult() == null) {
+                throw new LlmException();
+            }
+            return response;
+        } catch (LlmException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.error("chat conversation={} outcome=error model call failed", conversationId, e);
+            throw new LlmException(e);
         }
     }
 
@@ -126,21 +104,11 @@ public class ChatService {
             discovered = mcpTools.getToolCallbacks();
         } catch (RuntimeException e) {
             log.warn("MCP server unavailable, can't list tools cause=\"{}\"", e.getMessage());
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "The transport data service is unavailable. Try again shortly.", e);
+            throw new McpUnavailableException(e);
         }
         return Arrays.stream(discovered)
                 .map(tool -> new MeteredToolCallback(tool, calls, meters))
                 .toArray(ToolCallback[]::new);
-    }
-
-    private void recordTokens(TokenUsage tokens) {
-        record("prompt", tokens.promptTokens());
-        record("completion", tokens.completionTokens());
-    }
-
-    private void record(String type, int count) {
-        meters.summary("orchestrator.chat.tokens", "type", type).record(count);
     }
 
     private static int n(@Nullable Integer value) {

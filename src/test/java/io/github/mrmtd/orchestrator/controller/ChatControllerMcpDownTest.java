@@ -1,4 +1,4 @@
-package io.github.mrmtd.orchestrator;
+package io.github.mrmtd.orchestrator.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.ai.mcp.client.request-timeout=2s",
         "spring.ai.openai.api-key=test-key"})
 @AutoConfigureMockMvc
-class McpServerDownTest {
+class ChatControllerMcpDownTest {
 
     @Autowired
     MockMvc mvc;
