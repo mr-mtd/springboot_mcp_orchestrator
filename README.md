@@ -21,6 +21,8 @@ decides which tools to call and with what arguments, calls them through MCP, and
 results. The orchestrator doesn't know about loads or carriers: whatever tools the MCP server
 offers, the model can use.
 
+try it out: https://d23pzgqslfrw1a.cloudfront.net/swagger-ui/index.html
+
 - Java 21, Spring Boot 4.2, Spring AI 2.1 (OpenAI chat model, MCP client, session memory)
 - One endpoint: `POST /api/v1/chat`, on port `8081` (the MCP server is on `8080`)
 - Swagger UI at `/swagger`, OpenAPI document at `/v3/api-docs`
