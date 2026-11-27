@@ -18,7 +18,7 @@ spring:
         streamable-http:
           connections:
             transport:
-              url: ${MCP_SERVER_URL:http://localhost:8080}
+              url: ${MCP_SERVER_URL:http://localhost:9080}
               endpoint: /mcp
 
 server:
