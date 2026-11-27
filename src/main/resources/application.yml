@@ -44,3 +44,11 @@ logging:
     level: "%5p [req=%X{requestId:-}]"
   level:
     io.github.mrmtd.orchestrator: ${LOG_LEVEL:INFO}
+
+# Swagger UI for the chat API at /swagger, OpenAPI document at /v3/api-docs.
+springdoc:
+  paths-to-match: /api/**
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger
