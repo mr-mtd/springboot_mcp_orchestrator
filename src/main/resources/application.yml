@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: transport-mcp-orchestrator
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  # The transport MCP server defaults to 8080, so the orchestrator takes 8081.
+  port: ${PORT:8081}
+
+orchestrator:
+  mcp:
+    base-url: ${MCP_SERVER_URL:http://localhost:8080}
+    endpoint: ${MCP_ENDPOINT:/mcp}
+    connect-timeout: ${MCP_CONNECT_TIMEOUT:5s}
+    request-timeout: ${MCP_REQUEST_TIMEOUT:10s}
+    initialization-timeout: ${MCP_INIT_TIMEOUT:10s}
+  cors:
+    # Comma separated. Defaults cover Create React App (3000) and Vite (5173) dev servers.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: transport-mcp-orchestrator
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+logging:
+  # Every line carries the request's correlation id and, inside an MCP call, the tool.
+  pattern:
+    level: "%5p [req=%X{requestId:-} tool=%X{mcpTool:-}]"
+  level:
+    io.github.mrmtd.orchestrator: ${LOG_LEVEL:INFO}
+
+springdoc:
+  paths-to-match: /api/**
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger
