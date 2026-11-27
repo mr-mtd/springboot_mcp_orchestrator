@@ -7,6 +7,7 @@
 ![OpenAI](https://img.shields.io/badge/LLM-OpenAI-412991?logo=openai&logoColor=white)
 ![MCP client Streamable HTTP](https://img.shields.io/badge/MCP%20client-Streamable%20HTTP-000000)
 ![CORS React](https://img.shields.io/badge/CORS-React%20ready-61DAFB?logo=react&logoColor=black)
+![OpenAPI](https://img.shields.io/badge/OpenAPI-Swagger%20UI-85EA2D?logo=swagger&logoColor=black)
 ![Micrometer](https://img.shields.io/badge/metrics-Micrometer-1EB980)
 ![Prometheus](https://img.shields.io/badge/Prometheus-%2Factuator%2Fprometheus-E6522C?logo=prometheus&logoColor=white)
 ![JUnit 5](https://img.shields.io/badge/tested%20with-JUnit%205-25A162?logo=junit5&logoColor=white)
@@ -22,6 +23,7 @@ offers, the model can use.
 
 - Java 21, Spring Boot 4.2, Spring AI 2.1 (OpenAI chat model, MCP client, session memory)
 - One endpoint: `POST /api/v1/chat`, on port `8081` (the MCP server is on `8080`)
+- Swagger UI at `/swagger`, OpenAPI document at `/v3/api-docs`
 
 ## How it works
 
@@ -81,7 +83,7 @@ goes back to the model, which explains it or retries with corrected input.
 ```
 src/main/java/io/github/mrmtd/orchestrator
 ├── OrchestratorApplication.java
-├── config/       ChatClientConfig (system prompt, conversation history), CorsConfig
+├── config/       ChatClientConfig (system prompt, conversation history), CorsConfig, OpenApiConfig
 ├── controller/   ChatController (POST /api/v1/chat)
 ├── exception/    GlobalExceptionHandler, LlmException (502), McpUnavailableException (503)
 ├── filter/       RequestIdFilter (X-Request-Id, access log)
@@ -114,6 +116,10 @@ src/test/java/io/github/mrmtd/orchestrator
   "durationMs": 1903
 }
 ```
+
+To try it in the browser, open **http://localhost:8081/swagger**, expand `POST /api/v1/chat`,
+click **Try it out** and send the example. The request and response are documented there with
+examples, as are the 400, 502 and 503 errors.
 
 Send the `conversationId` back to continue the conversation; leave it out to start a new one.
 History is kept in memory for an hour and trimmed to the last 10 turns once it passes 20, so it is

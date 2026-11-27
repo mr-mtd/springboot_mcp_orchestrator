@@ -154,6 +154,18 @@ class ChatControllerIntegrationTest {
     }
 
     @Test
+    void documentsTheChatApiInSwagger() throws Exception {
+        mvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").value("Transport MCP orchestrator"))
+                .andExpect(jsonPath("$.paths['/api/v1/chat'].post.summary").value("Send a chat message"))
+                .andExpect(jsonPath("$.paths['/api/v1/chat'].post.requestBody.content['application/json'].examples").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/chat'].post.responses['503']").exists())
+                .andExpect(jsonPath("$.components.schemas.ChatReply.properties.toolCalls").exists());
+        mvc.perform(get("/swagger")).andExpect(status().is3xxRedirection());
+    }
+
+    @Test
     void exposesPrometheusMetrics() throws Exception {
         mvc.perform(get("/actuator/prometheus")).andExpect(status().isOk());
     }
