@@ -1,4 +1,4 @@
-package io.github.mrmtd.orchestrator.support;
+package io.github.mrmtd.orchestrator;
 
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
@@ -28,6 +28,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * </ul>
  */
 public final class FakeTransportMcpServer implements AutoCloseable {
+
+    private static final tools.jackson.databind.json.JsonMapper JSON = tools.jackson.databind.json.JsonMapper.builder().build();
 
     private final Tomcat tomcat = new Tomcat();
     private final McpSyncServer server;
@@ -208,7 +210,8 @@ public final class FakeTransportMcpServer implements AutoCloseable {
     }
 
     private static McpSchema.CallToolResult ok(Map<String, Object> body) {
-        return McpSchema.CallToolResult.builder().structuredContent(body).addTextContent("ok").build();
+        // Like the real server: the result as structured content and as JSON text, which is what the model sees.
+        return McpSchema.CallToolResult.builder().structuredContent(body).addTextContent(JSON.writeValueAsString(body)).build();
     }
 
     private static McpSchema.CallToolResult error(String message) {

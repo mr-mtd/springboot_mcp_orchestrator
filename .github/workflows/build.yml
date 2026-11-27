@@ -30,8 +30,8 @@ jobs:
           java-version: '21'
           cache: maven
 
-      # Unit, MVC and integration tests. The integration tests start a real MCP server (MCP Java SDK)
-      # in-process, so no Docker or database is needed.
+      # The tests run a real MCP server (MCP Java SDK) and a scripted fake of the OpenAI API
+      # in-process, so no Docker, database or OpenAI key is needed.
       - name: Build and test
         run: mvn -B -ntp verify
 
