@@ -268,9 +268,12 @@ Then start the orchestrator as in step 3 above, without `MCP_SERVER_URL` (it def
 
 ### In production
 
-When the orchestrator is deployed, it runs on the same EC2 host and joins the `transport` Docker
+The orchestrator runs on the same EC2 host as the MCP server and joins the `transport` Docker
 network. It calls the MCP server directly with `MCP_SERVER_URL=http://transport-mcp-server:8080`,
-with no tunnel, and the MCP server never gets a public port.
+with no tunnel, and the MCP server never gets a public port. The React app calls it at
+`https://d23pzgqslfrw1a.cloudfront.net/api/v1/chat` through CloudFront, which reaches the instance
+privately (a CloudFront VPC origin). Every push to `main` publishes the image to GHCR and
+redeploys it. See [`deploy/ec2/README.md`](deploy/ec2/README.md).
 
 ### In Docker
 
@@ -294,5 +297,6 @@ usage, metrics, validation, the `502` on a model failure, and CORS. `ChatControl
 app starts without the MCP server and answers `503`.
 
 GitHub Actions runs `mvn verify` on every push to `main` and `feature/dev` and on every pull
-request, writes a test summary, uploads the coverage report, and checks the Docker image builds:
-[`.github/workflows/build.yml`](.github/workflows/build.yml).
+request, writes a test summary, uploads the coverage report, and checks the Docker image builds.
+Pushes to `main` and `feature/dev` also publish the image to GHCR, and pushes to `main` deploy it to
+EC2: [`.github/workflows/build.yml`](.github/workflows/build.yml).
