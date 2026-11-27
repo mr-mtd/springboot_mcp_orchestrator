@@ -178,33 +178,99 @@ At `/actuator/metrics` and `/actuator/prometheus`:
 
 ## Run locally
 
-You need **JDK 21**, **Maven 3.9+**, an **OpenAI API key**, and the transport MCP server running.
+You need **JDK 21**, **Maven 3.9+**, an **OpenAI API key**, and a transport MCP server to talk to.
+The easiest option is to tunnel to the one already running on AWS (option A). Option B runs the
+MCP server on your machine instead.
 
-1. Start the [transport MCP server](https://github.com/mr-mtd/springboot_MCP_server) on port 8080.
-   To run it on a local Postgres in Docker:
+### A. Use the MCP server on AWS through an SSM tunnel
+
+The transport MCP server runs privately on an EC2 instance (`i-01166c968e71e477a`, us-east-2). It
+has no public IP and no open inbound ports, so you reach it with AWS Systems Manager (SSM) port
+forwarding.
+
+Prerequisites:
+
+- [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html), a recent version that includes `aws login`
+- [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) for the AWS CLI
+- Console access to AWS account `988233322191`
+
+1. **Sign in.** Press **Enter** at the region prompt, then finish signing in in the browser tab
+   that opens. The credentials are short-lived, so no access keys are stored.
 
    ```bash
-   git clone https://github.com/mr-mtd/springboot_MCP_server.git && cd springboot_MCP_server
-   docker run -d --name transport-db -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=transport postgres:18
-   sed -e 's/CHANGE_ME_1/migrator/' -e 's/CHANGE_ME_2/mcp/' db/roles.sql | docker exec -i transport-db psql -U postgres -d transport
-   MIGRATOR_PASSWORD=migrator mvn spring-boot:run -Dspring-boot.run.profiles=migrate
-   DB_PASSWORD=mcp mvn spring-boot:run
+   aws login --region us-east-2
+   aws sts get-caller-identity   # should show account 988233322191
    ```
 
-2. Start the orchestrator in a second terminal:
+2. **Open the tunnel.** Leave this terminal open; the tunnel stays up until you press `Ctrl+C`.
+
+   ```bash
+   aws ssm start-session \
+     --target i-01166c968e71e477a \
+     --document-name AWS-StartPortForwardingSession \
+     --parameters portNumber=8080,localPortNumber=9080
+   ```
+
+   The MCP server is now on `localhost:9080`:
+
+   | What | URL |
+   | --- | --- |
+   | MCP endpoint (Streamable HTTP) | `http://localhost:9080/mcp` |
+   | Swagger UI (REST mirror of the tools) | `http://localhost:9080/swagger` |
+   | Health | `http://localhost:9080/actuator/health` |
+
+3. **Start the orchestrator** in a second terminal, pointed at the tunnel. `MCP_SERVER_URL` is the
+   base URL; the orchestrator adds `/mcp` itself.
 
    ```bash
    cd springboot_mcp_orchestrator
-   export OPENAI_API_KEY=sk-...        # your key; keep it out of the repo
+   export OPENAI_API_KEY=sk-...                    # your key; keep it out of the repo
+   export MCP_SERVER_URL=http://localhost:9080
    mvn spring-boot:run
    ```
 
-3. Try it:
+   On Windows PowerShell, set the variables with `$env:OPENAI_API_KEY="sk-..."` and
+   `$env:MCP_SERVER_URL="http://localhost:9080"` instead.
+
+4. **Try it** in Swagger UI at http://localhost:8081/swagger, or:
 
    ```bash
    curl -s localhost:8081/api/v1/chat -H 'Content-Type: application/json' \
      -d '{"message":"Which loads from Texas are running late?"}'
    ```
+
+Troubleshooting:
+
+- **`aws login` seems to hang:** it's waiting at the region prompt. Press Enter.
+- **`SessionManagerPlugin is not found`:** install the Session Manager plugin, then open a new terminal.
+- **`ExpiredToken` or access denied:** run `aws login --region us-east-2` again.
+- **The tunnel opens but requests fail:** the server may be restarting after a deploy. A cold start
+  takes up to about 2 minutes. Check `http://localhost:9080/actuator/health`.
+- **Port 9080 is already in use:** change `localPortNumber` to a free port, and `MCP_SERVER_URL` to match.
+- **`/api/v1/chat` answers `503`:** the orchestrator can't reach the MCP server. Check the tunnel is
+  still open and `MCP_SERVER_URL` is right.
+
+### B. Run the MCP server on your machine
+
+To run the [transport MCP server](https://github.com/mr-mtd/springboot_MCP_server) locally on port
+8080 with Postgres in Docker:
+
+```bash
+git clone https://github.com/mr-mtd/springboot_MCP_server.git && cd springboot_MCP_server
+docker run -d --name transport-db -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=transport postgres:18
+sed -e 's/CHANGE_ME_1/migrator/' -e 's/CHANGE_ME_2/mcp/' db/roles.sql | docker exec -i transport-db psql -U postgres -d transport
+MIGRATOR_PASSWORD=migrator mvn spring-boot:run -Dspring-boot.run.profiles=migrate
+DB_PASSWORD=mcp mvn spring-boot:run
+```
+
+Then start the orchestrator as in step 3 above, without `MCP_SERVER_URL` (it defaults to
+`http://localhost:8080`).
+
+### In production
+
+When the orchestrator is deployed, it runs on the same EC2 host and joins the `transport` Docker
+network. It calls the MCP server directly with `MCP_SERVER_URL=http://transport-mcp-server:8080`,
+with no tunnel, and the MCP server never gets a public port.
 
 ### In Docker
 
