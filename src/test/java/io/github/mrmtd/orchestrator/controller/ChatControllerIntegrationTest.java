@@ -1,5 +1,7 @@
-package io.github.mrmtd.orchestrator;
+package io.github.mrmtd.orchestrator.controller;
 
+import io.github.mrmtd.orchestrator.support.FakeOpenAi;
+import io.github.mrmtd.orchestrator.support.FakeTransportMcpServer;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-class ChatIntegrationTest {
+class ChatControllerIntegrationTest {
 
     static final FakeTransportMcpServer mcp = new FakeTransportMcpServer();
     static final FakeOpenAi openAi = new FakeOpenAi();

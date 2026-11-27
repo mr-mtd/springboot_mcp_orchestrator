@@ -1,4 +1,4 @@
-package io.github.mrmtd.orchestrator;
+package io.github.mrmtd.orchestrator.support;
 
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpServerFeatures;

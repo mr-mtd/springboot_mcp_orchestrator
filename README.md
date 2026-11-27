@@ -76,6 +76,24 @@ sequenceDiagram
 If a tool returns an error (unknown load, bad input, the server's rate limit), the error message
 goes back to the model, which explains it or retries with corrected input.
 
+## Project layout
+
+```
+src/main/java/io/github/mrmtd/orchestrator
+├── OrchestratorApplication.java
+├── config/       ChatClientConfig (system prompt, conversation history), CorsConfig
+├── controller/   ChatController (POST /api/v1/chat)
+├── exception/    GlobalExceptionHandler, LlmException (502), McpUnavailableException (503)
+├── filter/       RequestIdFilter (X-Request-Id, access log)
+├── mcp/          MeteredToolCallback (times, logs and records each MCP tool call)
+├── model/        ChatRequest, ChatReply, ToolCall, TokenUsage
+└── service/      ChatService (model call with MCP tools, metrics)
+
+src/test/java/io/github/mrmtd/orchestrator
+├── controller/   ChatControllerIntegrationTest, ChatControllerMcpDownTest
+└── support/      FakeOpenAi, FakeTransportMcpServer
+```
+
 ## API
 
 `POST /api/v1/chat`
@@ -138,7 +156,7 @@ returned in the response):
 ```
 INFO [req=63da5a38-…] MeteredToolCallback : tool=getLoadStatus outcome=success durationMs=18 arguments={"loadNumber":"420"}
 INFO [req=63da5a38-…] ChatService         : chat conversation=a82d58fb-… outcome=success toolCalls=1 promptTokens=250 completionTokens=50 durationMs=84
-INFO [req=63da5a38-…] http                : method=POST path=/api/v1/chat status=200 durationMs=87
+INFO [req=63da5a38-…] RequestIdFilter     : method=POST path=/api/v1/chat status=200 durationMs=87
 ```
 
 At `/actuator/metrics` and `/actuator/prometheus`:
@@ -196,11 +214,11 @@ docker run --rm -p 8081:8081 -e OPENAI_API_KEY \
 mvn verify      # tests + JaCoCo report at target/site/jacoco/index.html
 ```
 
-No Docker, database or OpenAI key needed. `ChatIntegrationTest` runs the real Spring AI OpenAI
+No Docker, database or OpenAI key needed. `ChatControllerIntegrationTest` runs the real Spring AI OpenAI
 client against a scripted fake of the OpenAI API, and the real MCP client against an in-process MCP
 server built with the MCP Java SDK (same tools and error messages as the transport MCP server). It
 checks the tool call round trip, that tool errors go back to the model, conversation history, token
-usage, metrics, validation, the `502` on a model failure, and CORS. `McpServerDownTest` checks the
+usage, metrics, validation, the `502` on a model failure, and CORS. `ChatControllerMcpDownTest` checks the
 app starts without the MCP server and answers `503`.
 
 GitHub Actions runs `mvn verify` on every push to `main` and `feature/dev` and on every pull
